@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  keithley-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - keithley-venv:/home/vscode/.local
+    environment:
+      - DISPLAY=:99
+      - PYTHONPATH=/workspace
+      - QT_QPA_PLATFORM=xcb
+    working_dir: /workspace
+    command: sleep infinity
+    user: vscode
+    network_mode: host
+
+  # Optional: X11 server service for GUI testing
+  x11-server:
+    image: jlesage/baseimage-gui:ubuntu-20.04
+    environment:
+      - DISPLAY_WIDTH=1280
+      - DISPLAY_HEIGHT=768
+    ports:
+      - "5800:5800"
+    volumes:
+      - x11-data:/config
+
+volumes:
+  keithley-venv:
+  x11-data:

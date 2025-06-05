@@ -23,7 +23,13 @@ jobs:
         pip install pyinstaller
     - name: Build application
       run: |
-        python build_app.py
+        echo "Current directory: $(pwd)"
+        echo "Files in directory:"
+        dir
+        echo "Building Windows application..."
+        python build_app.py --clean
+      env:
+        PYTHONPATH: ${{ github.workspace }}
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -45,7 +51,13 @@ jobs:
         pip install pyinstaller
     - name: Build application
       run: |
-        python build_app.py
+        echo "Current directory: $(pwd)"
+        echo "Files in directory:"
+        ls -la
+        echo "Building macOS application..."
+        python build_app.py --clean
+      env:
+        PYTHONPATH: ${{ github.workspace }}
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
@@ -67,9 +79,16 @@ jobs:
         pip install pyinstaller
     - name: Build application
       run: |
-        python build_app.py
+        echo "Current directory: $(pwd)"
+        echo "Files in directory:"
+        ls -la
+        echo "Building Linux application..."
+        python build_app.py --clean
+      env:
+        PYTHONPATH: ${{ github.workspace }}
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-build
+        path: dist/
         path: dist/

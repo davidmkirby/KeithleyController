@@ -151,6 +151,8 @@ keithley_data_*.csv
 
 # PyInstaller spec files (generated)
 *.spec
+# But keep the main project spec file
+!keithley.spec
 
 # Application-specific temporary files
 temp/

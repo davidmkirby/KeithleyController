@@ -17,7 +17,7 @@ PyQt6 application for controlling Keithley 2290-5 High Voltage Power Supply and 
 ### Hardware
 - Keithley 2290-5 High Voltage Power Supply (up to 5kV)
 - Keithley 6485 Picoammeter
-- NI GPIB-USB-B adapter (or compatible GPIB interface)
+- NI GPIB-USB-HS adapter (or compatible GPIB interface)
 - GPIB cables and safety equipment
 
 ### Software Dependencies

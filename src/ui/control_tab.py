@@ -293,20 +293,11 @@ class ControlTab(QWidget):
             self.log_message.emit("ERROR: Power supply connection failed")
 
     def disconnectPowerSupply(self):
-        """Disconnect power supply"""
+        """Disconnect power supply using improved safe disconnect"""
         if self.instrument_controller.power_supply:
             try:
-                # Safety: ensure output is off before disconnecting
-                self.instrument_controller.disableOutput()
-
-                # Return to local control (restore front panel)
-                try:
-                    self.instrument_controller.power_supply.write("SYST:LOC")
-                    self.log_message.emit("Power supply returned to local control")
-                except Exception as loc_error:
-                    self.log_message.emit(f"WARNING: Could not return power supply to local control: {str(loc_error)}")
-
-                self.instrument_controller.power_supply.close()
+                # Use the improved safe disconnect method
+                self.instrument_controller._safeDisconnectPowerSupply()
                 self.instrument_controller.power_supply = None
                 self.log_message.emit("Power supply disconnected")
             except Exception as e:
@@ -329,17 +320,11 @@ class ControlTab(QWidget):
             self.log_message.emit("ERROR: Picoammeter connection failed")
 
     def disconnectPicoammeter(self):
-        """Disconnect picoammeter"""
+        """Disconnect picoammeter using improved safe disconnect"""
         if self.instrument_controller.picoammeter:
             try:
-                # Return to local control (restore front panel)
-                try:
-                    self.instrument_controller.picoammeter.write("SYST:LOC")
-                    self.log_message.emit("Picoammeter returned to local control")
-                except Exception as loc_error:
-                    self.log_message.emit(f"WARNING: Could not return picoammeter to local control: {str(loc_error)}")
-
-                self.instrument_controller.picoammeter.close()
+                # Use the improved safe disconnect method
+                self.instrument_controller._safeDisconnectPicoammeter()
                 self.instrument_controller.picoammeter = None
                 self.log_message.emit("Picoammeter disconnected")
             except Exception as e:

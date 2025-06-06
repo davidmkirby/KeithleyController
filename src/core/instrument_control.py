@@ -304,7 +304,7 @@ class InstrumentController(QObject):
             return False
 
     def disconnectAllInstruments(self):
-        """Safely disconnect all instruments"""
+        """Safely disconnect all instruments with improved error recovery"""
         self.logger.info("Disconnecting all instruments")
 
         # Stop data acquisition
@@ -314,21 +314,7 @@ class InstrumentController(QObject):
         # Disconnect power supply
         if self.power_supply:
             try:
-                # Safety: ensure output is off
-                self.power_supply.write("HVOF")
-                self.logger.info("Power supply output disabled")
-                time.sleep(0.5)  # Allow time for shutdown
-
-                # Return to local control (restore front panel)
-                try:
-                    self.power_supply.write("SYST:LOC")
-                    self.logger.info("Power supply returned to local control")
-                except Exception as loc_error:
-                    self.logger.warning(f"Could not return power supply to local control: {str(loc_error)}")
-
-                self.power_supply.close()
-                self.log_message.emit("Power supply disconnected")
-                self.logger.info("Power supply disconnected")
+                self._safeDisconnectPowerSupply()
             except Exception as e:
                 error_msg = f"Error disconnecting power supply: {str(e)}"
                 self.log_message.emit(f"ERROR: {error_msg}")
@@ -340,16 +326,7 @@ class InstrumentController(QObject):
         # Disconnect picoammeter
         if self.picoammeter:
             try:
-                # Return to local control (restore front panel)
-                try:
-                    self.picoammeter.write("SYST:LOC")
-                    self.logger.info("Picoammeter returned to local control")
-                except Exception as loc_error:
-                    self.logger.warning(f"Could not return picoammeter to local control: {str(loc_error)}")
-
-                self.picoammeter.close()
-                self.log_message.emit("Picoammeter disconnected")
-                self.logger.info("Picoammeter disconnected")
+                self._safeDisconnectPicoammeter()
             except Exception as e:
                 error_msg = f"Error disconnecting picoammeter: {str(e)}"
                 self.log_message.emit(f"ERROR: {error_msg}")
@@ -357,6 +334,178 @@ class InstrumentController(QObject):
             finally:
                 self.picoammeter = None
                 self.picoammeter_connected.emit(False, "")
+
+    def _clearInstrumentErrors(self, instrument, instrument_name):
+        """Clear error queue and status from instrument"""
+        try:
+            # Clear errors and status
+            instrument.write("*CLS")
+            time.sleep(0.1)  # Allow time for clear to complete
+
+            # Query and clear any remaining errors
+            try:
+                errors = []
+                for _ in range(10):  # Check up to 10 errors
+                    error = instrument.query("SYST:ERR?").strip()
+                    if "No error" in error or "+0," in error:
+                        break
+                    errors.append(error)
+
+                if errors:
+                    self.logger.warning(f"{instrument_name} had errors: {'; '.join(errors)}")
+                    self.log_message.emit(f"WARNING: {instrument_name} had errors that were cleared")
+            except:
+                # If error query fails, continue with disconnect
+                pass
+
+        except Exception as e:
+            self.logger.warning(f"Could not clear {instrument_name} errors: {str(e)}")
+
+    def _waitForInstrumentReady(self, instrument, instrument_name, timeout=3.0):
+        """Wait for instrument to be ready for commands"""
+        try:
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                try:
+                    # Query operation complete status
+                    opc = instrument.query("*OPC?").strip()
+                    if opc == "1":
+                        return True
+                except:
+                    pass
+                time.sleep(0.1)
+
+            self.logger.warning(f"{instrument_name} did not respond ready within timeout")
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Could not check {instrument_name} ready status: {str(e)}")
+            return False
+
+    def _safeDisconnectPowerSupply(self):
+        """Safely disconnect power supply with proper error handling"""
+        self.logger.info("Starting safe power supply disconnect sequence")
+
+        # Step 1: Clear any existing errors
+        self._clearInstrumentErrors(self.power_supply, "Power Supply")
+
+        # Step 2: Disable output with verification
+        try:
+            self.power_supply.write("HVOF")
+            self.logger.info("Power supply output disabled")
+            time.sleep(1.0)  # Allow more time for HV to discharge
+
+            # Verify output is off
+            try:
+                output_state = self.power_supply.query("OUTP?").strip()
+                if output_state != "0":
+                    self.logger.warning(f"Power supply output state unexpected: {output_state}")
+            except:
+                pass  # Continue even if query fails
+
+        except Exception as e:
+            self.logger.error(f"Failed to disable power supply output: {str(e)}")
+            # Continue with disconnect even if HVOF fails
+
+        # Step 3: Wait for instrument to be ready
+        self._waitForInstrumentReady(self.power_supply, "Power Supply")
+
+        # Step 4: Clear errors again before local mode
+        self._clearInstrumentErrors(self.power_supply, "Power Supply")
+
+        # Step 5: Return to local control with multiple attempts
+        local_success = False
+        for attempt in range(3):
+            try:
+                self.power_supply.write("SYST:LOC")
+                time.sleep(0.5)  # Allow time for local mode to take effect
+
+                # Try to verify local mode (this might fail if already local)
+                try:
+                    # Send a simple query to check if communication still works
+                    self.power_supply.query("*IDN?")
+                    # If we get here, instrument is still in remote mode
+                    if attempt < 2:  # Don't log warning on last attempt
+                        self.logger.warning(f"Power supply local mode attempt {attempt + 1} - still responding to queries")
+                except:
+                    # If query fails, instrument likely went to local mode successfully
+                    local_success = True
+                    break
+
+            except Exception as loc_error:
+                self.logger.warning(f"Power supply local mode attempt {attempt + 1} failed: {str(loc_error)}")
+                if attempt < 2:  # Don't sleep on last attempt
+                    time.sleep(0.5)
+
+        if local_success:
+            self.logger.info("Power supply returned to local control")
+        else:
+            self.logger.warning("Power supply local mode status uncertain - attempting to close connection")
+
+        # Step 6: Close the connection
+        try:
+            self.power_supply.close()
+            self.log_message.emit("Power supply disconnected")
+            self.logger.info("Power supply connection closed")
+        except Exception as e:
+            self.logger.error(f"Error closing power supply connection: {str(e)}")
+
+    def _safeDisconnectPicoammeter(self):
+        """Safely disconnect picoammeter with proper error handling"""
+        self.logger.info("Starting safe picoammeter disconnect sequence")
+
+        # Step 1: Clear any existing errors
+        self._clearInstrumentErrors(self.picoammeter, "Picoammeter")
+
+        # Step 2: Stop any ongoing measurements
+        try:
+            self.picoammeter.write("ABOR")  # Abort any running measurements
+            time.sleep(0.2)
+        except:
+            pass  # Continue even if abort fails
+
+        # Step 3: Wait for instrument to be ready
+        self._waitForInstrumentReady(self.picoammeter, "Picoammeter")
+
+        # Step 4: Clear errors again before local mode
+        self._clearInstrumentErrors(self.picoammeter, "Picoammeter")
+
+        # Step 5: Return to local control with multiple attempts
+        local_success = False
+        for attempt in range(3):
+            try:
+                self.picoammeter.write("SYST:LOC")
+                time.sleep(0.5)  # Allow time for local mode to take effect
+
+                # Try to verify local mode (this might fail if already local)
+                try:
+                    # Send a simple query to check if communication still works
+                    self.picoammeter.query("*IDN?")
+                    # If we get here, instrument is still in remote mode
+                    if attempt < 2:  # Don't log warning on last attempt
+                        self.logger.warning(f"Picoammeter local mode attempt {attempt + 1} - still responding to queries")
+                except:
+                    # If query fails, instrument likely went to local mode successfully
+                    local_success = True
+                    break
+
+            except Exception as loc_error:
+                self.logger.warning(f"Picoammeter local mode attempt {attempt + 1} failed: {str(loc_error)}")
+                if attempt < 2:  # Don't sleep on last attempt
+                    time.sleep(0.5)
+
+        if local_success:
+            self.logger.info("Picoammeter returned to local control")
+        else:
+            self.logger.warning("Picoammeter local mode status uncertain - attempting to close connection")
+
+        # Step 6: Close the connection
+        try:
+            self.picoammeter.close()
+            self.log_message.emit("Picoammeter disconnected")
+            self.logger.info("Picoammeter connection closed")
+        except Exception as e:
+            self.logger.error(f"Error closing picoammeter connection: {str(e)}")
 
     def __del__(self):
         """Destructor - ensure proper cleanup"""

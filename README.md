@@ -74,11 +74,11 @@ Run the application:
 
 ```bash
 # Using main.py from project root
-cd /Users/david/Documents/Git/KeithleyController
+cd KeithleyController
 python src/main.py
 
 # Using launcher script
-cd /Users/david/Documents/Git/KeithleyController
+cd KeithleyController
 ./keithley_controller.py
 ```
 

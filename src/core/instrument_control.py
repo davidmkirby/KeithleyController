@@ -207,10 +207,14 @@ class InstrumentController(QObject):
             self.power_supply = self.resource_manager.open_resource(resource_string)
             self.power_supply.timeout = 5000  # 5 second timeout
 
-            # Reset and initialize
-            self.power_supply.write("*RST")
+            # Clear any existing errors first
             self.power_supply.write("*CLS")
-            self.power_supply.write("*RCL 0")  # Recall default settings
+            time.sleep(0.5)
+
+            # Reset to defaults (2290-5 supports *RST)
+            self.power_supply.write("*RST")
+            time.sleep(1.0)  # Give time for reset to complete
+            # Note: Removed "*RCL 0" - not supported by 2290-5
 
             # Get instrument identification
             idn = self.power_supply.query("*IDN?").strip()
@@ -222,8 +226,8 @@ class InstrumentController(QObject):
                 self.log_message.emit(f"WARNING: {warning_msg}")
                 self.logger.warning(warning_msg)
 
-            # Set safe default limits (from manual defaults)
-            self.power_supply.write("VLIM 5000")  # 5000V voltage limit
+            # Set safe default limits using proper format
+            self.power_supply.write("VLIM 5000")     # 5000V voltage limit (integer)
             self.power_supply.write("ILIM 5.25E-3")  # 5.25mA current limit
 
             self.log_message.emit(f"Power supply connected: {idn}")
@@ -363,20 +367,11 @@ class InstrumentController(QObject):
 
     def _waitForInstrumentReady(self, instrument, instrument_name, timeout=3.0):
         """Wait for instrument to be ready for commands"""
+        # Note: 2290-5 doesn't support *OPC? so we just add a delay
         try:
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                try:
-                    # Query operation complete status
-                    opc = instrument.query("*OPC?").strip()
-                    if opc == "1":
-                        return True
-                except:
-                    pass
-                time.sleep(0.1)
-
-            self.logger.warning(f"{instrument_name} did not respond ready within timeout")
-            return False
+            self.logger.info(f"Waiting for {instrument_name} to be ready...")
+            time.sleep(0.5)  # Fixed delay for 2290-5
+            return True
 
         except Exception as e:
             self.logger.warning(f"Could not check {instrument_name} ready status: {str(e)}")
@@ -389,60 +384,41 @@ class InstrumentController(QObject):
         # Step 1: Clear any existing errors
         self._clearInstrumentErrors(self.power_supply, "Power Supply")
 
-        # Step 2: Disable output with verification
+        # Step 2: Disable output
         try:
             self.power_supply.write("HVOF")
             self.logger.info("Power supply output disabled")
-            time.sleep(1.0)  # Allow more time for HV to discharge
+            time.sleep(1.0)  # Allow time for HV to discharge
 
-            # Verify output is off
-            try:
-                output_state = self.power_supply.query("OUTP?").strip()
-                if output_state != "0":
-                    self.logger.warning(f"Power supply output state unexpected: {output_state}")
-            except:
-                pass  # Continue even if query fails
+            # Note: 2290-5 doesn't support OUTP? query, so we skip verification
 
         except Exception as e:
             self.logger.error(f"Failed to disable power supply output: {str(e)}")
             # Continue with disconnect even if HVOF fails
 
-        # Step 3: Wait for instrument to be ready
-        self._waitForInstrumentReady(self.power_supply, "Power Supply")
-
-        # Step 4: Clear errors again before local mode
+        # Step 3: Clear errors again
         self._clearInstrumentErrors(self.power_supply, "Power Supply")
 
-        # Step 5: Return to local control with multiple attempts
+        # Step 4: Return to local control
+        # Note: 2290-5 doesn't support SYST:LOC - it returns to local when connection closes
         local_success = False
-        for attempt in range(3):
-            try:
-                self.power_supply.write("SYST:LOC")
-                time.sleep(0.5)  # Allow time for local mode to take effect
 
-                # Try to verify local mode (this might fail if already local)
-                try:
-                    # Send a simple query to check if communication still works
-                    self.power_supply.query("*IDN?")
-                    # If we get here, instrument is still in remote mode
-                    if attempt < 2:  # Don't log warning on last attempt
-                        self.logger.warning(f"Power supply local mode attempt {attempt + 1} - still responding to queries")
-                except:
-                    # If query fails, instrument likely went to local mode successfully
-                    local_success = True
-                    break
+        try:
+            # First, try to clear the device
+            self.power_supply.clear()
+            time.sleep(0.2)
 
-            except Exception as loc_error:
-                self.logger.warning(f"Power supply local mode attempt {attempt + 1} failed: {str(loc_error)}")
-                if attempt < 2:  # Don't sleep on last attempt
-                    time.sleep(0.5)
+            # For 2290-5, the proper way to return to local is to simply close the connection
+            # The instrument automatically returns to local when GPIB connection is terminated
+            local_success = True
+            self.logger.info("Power supply cleared, will return to local on close")
 
-        if local_success:
-            self.logger.info("Power supply returned to local control")
-        else:
-            self.logger.warning("Power supply local mode status uncertain - attempting to close connection")
+        except Exception as e:
+            self.logger.warning(f"Could not clear power supply: {str(e)}")
+            # Even if clear fails, closing connection will return to local
+            local_success = True
 
-        # Step 6: Close the connection
+        # Step 5: Close the connection
         try:
             self.power_supply.close()
             self.log_message.emit("Power supply disconnected")
@@ -574,9 +550,14 @@ class InstrumentController(QObject):
         if not self.power_supply:
             return False
         try:
-            self.power_supply.write(f"VSET {voltage}")
-            self.log_message.emit(f"Voltage set to {voltage}V")
-            self.logger.info(f"Voltage set to {voltage}V")
+            # Format voltage properly for 2290-5
+            # The 2290-5 expects voltage in format: VSET nnnn (no decimal point for voltages)
+            voltage_int = int(round(voltage))  # Round to nearest integer volt
+            command = f"VSET {voltage_int}"
+
+            self.power_supply.write(command)
+            self.log_message.emit(f"Voltage set to {voltage_int}V")
+            self.logger.info(f"Voltage set to {voltage_int}V using command: {command}")
             return True
         except Exception as e:
             self.log_message.emit(f"ERROR: Error setting voltage: {str(e)}")
@@ -588,9 +569,13 @@ class InstrumentController(QObject):
         if not self.power_supply:
             return False
         try:
-            self.power_supply.write(f"VLIM {limit}")
-            self.log_message.emit(f"Voltage limit set to {limit}V")
-            self.logger.info(f"Voltage limit set to {limit}V")
+            # Format voltage limit properly for 2290-5 (integer volts)
+            limit_int = int(round(limit))
+            command = f"VLIM {limit_int}"
+
+            self.power_supply.write(command)
+            self.log_message.emit(f"Voltage limit set to {limit_int}V")
+            self.logger.info(f"Voltage limit set to {limit_int}V using command: {command}")
             return True
         except Exception as e:
             self.log_message.emit(f"ERROR: Error setting voltage limit: {str(e)}")
@@ -602,10 +587,14 @@ class InstrumentController(QObject):
         if not self.power_supply:
             return False
         try:
+            # 2290-5 expects current in format: n.nnnE-n (scientific notation)
             limit_a = limit_ma / 1000.0  # Convert mA to A
-            self.power_supply.write(f"ILIM {limit_a}")
+            # Format in scientific notation with proper precision
+            command = f"ILIM {limit_a:.3E}"
+
+            self.power_supply.write(command)
             self.log_message.emit(f"Current limit set to {limit_ma}mA")
-            self.logger.info(f"Current limit set to {limit_ma}mA")
+            self.logger.info(f"Current limit set to {limit_ma}mA using command: {command}")
             return True
         except Exception as e:
             self.log_message.emit(f"ERROR: Error setting current limit: {str(e)}")

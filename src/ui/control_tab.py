@@ -107,7 +107,7 @@ class ControlTab(QWidget):
         layout.addWidget(QLabel("Output Voltage (V):"), 0, 0)
         self.voltage_spinbox = QDoubleSpinBox()
         self.voltage_spinbox.setRange(0, 5000)
-        self.voltage_spinbox.setDecimals(1)
+        self.voltage_spinbox.setDecimals(0)  # No decimal places for 2290-5
         self.voltage_spinbox.setSingleStep(10)
         self.voltage_spinbox.setMinimumHeight(35)
         self.voltage_spinbox.setFont(QFont("Arial", 11))
@@ -125,7 +125,7 @@ class ControlTab(QWidget):
         self.voltage_limit_spinbox = QDoubleSpinBox()
         self.voltage_limit_spinbox.setRange(0, 5000)
         self.voltage_limit_spinbox.setValue(5000)  # Safe default
-        self.voltage_limit_spinbox.setDecimals(1)
+        self.voltage_limit_spinbox.setDecimals(0)  # No decimal places for 2290-5
         self.voltage_limit_spinbox.setSingleStep(100)
         self.voltage_limit_spinbox.setMinimumHeight(35)
         self.voltage_limit_spinbox.setFont(QFont("Arial", 11))
@@ -482,7 +482,7 @@ class ControlTab(QWidget):
 
     def updateVoltageReading(self, voltage):
         """Update voltage reading display"""
-        self.voltage_reading.setText(f"{voltage:.1f} V")
+        self.voltage_reading.setText(f"{int(voltage)} V")
 
     def updateCurrentReading(self, current):
         """Update current reading display"""

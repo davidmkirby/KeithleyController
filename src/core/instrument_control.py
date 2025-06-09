@@ -7,7 +7,7 @@ Based on official Keithley SCPI commands from manuals
 import time
 import pyvisa
 import traceback
-from PyQt6.QtCore import QObject, pyqtSignal, QThread
+from PyQt6.QtCore import QObject, pyqtSignal, QThread, QTimer
 
 # Import the logger
 from src.core.logger import get_logger
@@ -118,6 +118,8 @@ class InstrumentController(QObject):
     data_ready = pyqtSignal(float, float, float)    # time, current, voltage
     log_message = pyqtSignal(str)
     status_message = pyqtSignal(str)
+    timer_updated = pyqtSignal(int)  # remaining seconds
+    timer_expired = pyqtSignal()     # timer finished
 
     def __init__(self):
         super().__init__()
@@ -130,6 +132,13 @@ class InstrumentController(QObject):
         # Data acquisition thread
         self.acquisition_thread = None
         self.is_acquiring = False
+
+        # HV output timer
+        self.hv_timer = QTimer()
+        self.hv_timer.timeout.connect(self._on_timer_tick)
+        self.hv_timer_duration = 0  # Total duration in seconds
+        self.hv_timer_remaining = 0  # Remaining time in seconds
+        self.hv_timer_active = False
 
         # Get logger
         self.logger = get_logger()
@@ -626,6 +635,18 @@ class InstrumentController(QObject):
             self.logger.error(f"Error enabling output: {str(e)}\n{traceback.format_exc()}")
             return False
 
+    def enableOutputWithTimer(self, timer_duration_seconds):
+        """Enable high voltage output with automatic timer shutdown"""
+        if not self.power_supply:
+            return False
+
+        # First enable the output
+        if self.enableOutput():
+            # Start the timer for automatic shutdown
+            self.startHVTimer(timer_duration_seconds)
+            return True
+        return False
+
     def disableOutput(self):
         """Disable high voltage output using HVOF command"""
         if not self.power_supply:
@@ -634,6 +655,11 @@ class InstrumentController(QObject):
             self.power_supply.write("HVOF")
             self.log_message.emit("High voltage output DISABLED")
             self.logger.info("High voltage output DISABLED")
+
+            # Stop the HV timer if it's running
+            if self.hv_timer_active:
+                self.stopHVTimer()
+
             return True
         except Exception as e:
             self.log_message.emit(f"ERROR: Error disabling output: {str(e)}")
@@ -651,6 +677,71 @@ class InstrumentController(QObject):
             self.log_message.emit(f"ERROR: Error reading voltage: {str(e)}")
             self.logger.error(f"Error reading voltage: {str(e)}\n{traceback.format_exc()}")
             return None
+
+    # HV Timer Control Methods
+    def startHVTimer(self, duration_seconds):
+        """Start the HV output timer for automatic shutdown"""
+        self.hv_timer_duration = duration_seconds
+        self.hv_timer_remaining = duration_seconds
+        self.hv_timer_active = True
+
+        # Start the timer to tick every second
+        self.hv_timer.start(1000)
+
+        hours = duration_seconds // 3600
+        minutes = (duration_seconds % 3600) // 60
+        seconds = duration_seconds % 60
+
+        self.log_message.emit(f"HV timer started for {hours:02d}:{minutes:02d}:{seconds:02d}")
+        self.logger.info(f"HV timer started for {duration_seconds} seconds ({hours:02d}:{minutes:02d}:{seconds:02d})")
+
+        # Emit initial timer update
+        self.timer_updated.emit(self.hv_timer_remaining)
+
+    def stopHVTimer(self):
+        """Stop the HV output timer"""
+        self.hv_timer.stop()
+        self.hv_timer_active = False
+
+        self.log_message.emit("HV timer stopped")
+        self.logger.info("HV timer stopped")
+
+        # Emit timer update to show it's stopped
+        self.timer_updated.emit(0)
+
+    def _on_timer_tick(self):
+        """Internal method called every second when timer is active"""
+        if not self.hv_timer_active:
+            return
+
+        self.hv_timer_remaining -= 1
+
+        # Emit timer update
+        self.timer_updated.emit(self.hv_timer_remaining)
+
+        if self.hv_timer_remaining <= 0:
+            # Timer expired - disable HV output
+            self.hv_timer.stop()
+            self.hv_timer_active = False
+
+            self.log_message.emit("HV timer expired - automatically disabling high voltage output")
+            self.logger.warning("HV timer expired - automatically disabling high voltage output")
+
+            # Disable the output
+            if self.disableOutput():
+                self.log_message.emit("High voltage output automatically disabled by timer")
+                self.logger.info("High voltage output automatically disabled by timer")
+
+            # Emit timer expired signal
+            self.timer_expired.emit()
+
+    def getHVTimerStatus(self):
+        """Get current timer status"""
+        return {
+            'active': self.hv_timer_active,
+            'remaining': self.hv_timer_remaining,
+            'total': self.hv_timer_duration
+        }
 
     # Picoammeter Control Methods (6485 SCPI commands)
     def readCurrent(self):

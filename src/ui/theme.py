@@ -308,6 +308,39 @@ STYLES = {
         }}
     """,
 
+    "timer_status_inactive": f"""
+        QLabel[timerStatus="inactive"] {{
+            background-color: {COLORS["background_light"]};
+            color: {COLORS["text_secondary"]};
+            border: 1px solid {COLORS["border"]};
+            border-radius: 4px;
+            padding: 5px;
+            font-weight: bold;
+        }}
+    """,
+
+    "timer_status_active": f"""
+        QLabel[timerStatus="active"] {{
+            background-color: {COLORS["info"]};
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["info_light"]};
+            border-radius: 4px;
+            padding: 5px;
+            font-weight: bold;
+        }}
+    """,
+
+    "timer_status_expired": f"""
+        QLabel[timerStatus="expired"] {{
+            background-color: {COLORS["warning"]};
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["warning_light"]};
+            border-radius: 4px;
+            padding: 5px;
+            font-weight: bold;
+        }}
+    """,
+
     "log_level_error": f"""
         QLabel[logLevel="error"] {{
             color: {COLORS["error"]};
@@ -391,6 +424,9 @@ def apply_app_style(app):
         STYLES["current_reading"],
         STYLES["hv_status_enabled"],
         STYLES["hv_status_disabled"],
+        STYLES["timer_status_inactive"],
+        STYLES["timer_status_active"],
+        STYLES["timer_status_expired"],
         STYLES["log_level_error"],
         STYLES["log_level_warning"],
         STYLES["check_box"]

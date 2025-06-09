@@ -156,6 +156,44 @@ class ControlTab(QWidget):
         self.set_ilimit_btn.setMinimumHeight(35)
         layout.addWidget(self.set_ilimit_btn, 2, 2)
 
+        # Timer controls
+        layout.addWidget(QLabel("HV Timer (hours):"), 3, 0)
+        self.timer_spinbox = QDoubleSpinBox()
+        self.timer_spinbox.setRange(0.0, 24.0)
+        self.timer_spinbox.setValue(4.0)  # Default 4 hours
+        self.timer_spinbox.setDecimals(1)
+        self.timer_spinbox.setSingleStep(0.5)
+        self.timer_spinbox.setMinimumHeight(35)
+        self.timer_spinbox.setFont(QFont("Arial", 11))
+        self.timer_spinbox.setEnabled(False)
+        layout.addWidget(self.timer_spinbox, 3, 1)
+
+        # Timer control buttons
+        timer_button_layout = QHBoxLayout()
+        self.enable_hv_with_timer_btn = QPushButton("Enable with Timer")
+        self.enable_hv_with_timer_btn.clicked.connect(self.enableOutputWithTimer)
+        self.enable_hv_with_timer_btn.setEnabled(False)
+        self.enable_hv_with_timer_btn.setMinimumHeight(35)
+        timer_button_layout.addWidget(self.enable_hv_with_timer_btn)
+
+        self.stop_timer_btn = QPushButton("Stop Timer")
+        self.stop_timer_btn.clicked.connect(self.stopTimer)
+        self.stop_timer_btn.setEnabled(False)
+        self.stop_timer_btn.setMinimumHeight(35)
+        timer_button_layout.addWidget(self.stop_timer_btn)
+
+        layout.addLayout(timer_button_layout, 3, 2)
+
+        # Timer status display
+        layout.addWidget(QLabel("Timer Status:"), 4, 0)
+        self.timer_status = QLabel("Inactive")
+        self.timer_status.setFrameShape(QFrame.Shape.Panel)
+        self.timer_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.timer_status.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        self.timer_status.setMinimumHeight(35)
+        self.timer_status.setProperty("timerStatus", "inactive")
+        layout.addWidget(self.timer_status, 4, 1, 1, 2)
+
         # HV Output control - prominent styling for safety
         hv_layout = QHBoxLayout()
 
@@ -175,7 +213,7 @@ class ControlTab(QWidget):
         self.disable_hv_btn.setEnabled(False)
         hv_layout.addWidget(self.disable_hv_btn)
 
-        layout.addLayout(hv_layout, 3, 0, 1, 3)
+        layout.addLayout(hv_layout, 5, 0, 1, 3)
 
         group.setLayout(layout)
         return group
@@ -278,6 +316,10 @@ class ControlTab(QWidget):
             self.updatePowerSupplyStatus)
         self.instrument_controller.picoammeter_connected.connect(
             self.updatePicoammeterStatus)
+        self.instrument_controller.timer_updated.connect(
+            self.updateTimerStatus)
+        self.instrument_controller.timer_expired.connect(
+            self.onTimerExpired)
 
     # Connection methods
     def connectPowerSupply(self):
@@ -372,6 +414,36 @@ class ControlTab(QWidget):
             self.output_status.style().polish(self.output_status)
             self.enable_hv_btn.setEnabled(True)
             self.disable_hv_btn.setEnabled(False)
+            self.enable_hv_with_timer_btn.setEnabled(True)
+            self.stop_timer_btn.setEnabled(False)
+
+    def enableOutputWithTimer(self):
+        """Enable high voltage output with timer"""
+        timer_hours = self.timer_spinbox.value()
+        timer_seconds = int(timer_hours * 3600)  # Convert hours to seconds
+
+        if timer_seconds <= 0:
+            self.log_message.emit("ERROR: Timer duration must be greater than 0")
+            return
+
+        if self.instrument_controller.enableOutputWithTimer(timer_seconds):
+            self.output_status.setText("ENABLED")
+            self.output_status.setProperty("outputStatus", "enabled")
+            self.output_status.style().unpolish(self.output_status)
+            self.output_status.style().polish(self.output_status)
+            self.enable_hv_btn.setEnabled(False)
+            self.enable_hv_with_timer_btn.setEnabled(False)
+            self.disable_hv_btn.setEnabled(True)
+            self.stop_timer_btn.setEnabled(True)
+
+    def stopTimer(self):
+        """Stop the HV timer"""
+        self.instrument_controller.stopHVTimer()
+        self.stop_timer_btn.setEnabled(False)
+        if "ENABLED" in self.output_status.text():
+            self.enable_hv_with_timer_btn.setEnabled(False)  # HV is still on, just no timer
+        else:
+            self.enable_hv_with_timer_btn.setEnabled(True)   # HV is off, can start with timer
 
     def setCurrentRange(self, range_text):
         """Set picoammeter current range"""
@@ -410,6 +482,8 @@ class ControlTab(QWidget):
             self.set_vlimit_btn.setEnabled(True)
             self.set_ilimit_btn.setEnabled(True)
             self.enable_hv_btn.setEnabled(True)
+            self.timer_spinbox.setEnabled(True)
+            self.enable_hv_with_timer_btn.setEnabled(True)
         else:
             self.ps_status.setText("Not Connected")
             self.ps_status.setProperty("connectionStatus", "disconnected")
@@ -427,6 +501,9 @@ class ControlTab(QWidget):
             self.set_ilimit_btn.setEnabled(False)
             self.enable_hv_btn.setEnabled(False)
             self.disable_hv_btn.setEnabled(False)
+            self.timer_spinbox.setEnabled(False)
+            self.enable_hv_with_timer_btn.setEnabled(False)
+            self.stop_timer_btn.setEnabled(False)
 
         self.updateConnectionIndicator()
 
@@ -497,3 +574,41 @@ class ControlTab(QWidget):
             self.current_reading.setText(f"{current*1e12:.3f} pA")
         else:
             self.current_reading.setText(f"{current:.3e} A")
+
+    def updateTimerStatus(self, remaining_seconds):
+        """Update timer status display"""
+        if remaining_seconds > 0:
+            hours = remaining_seconds // 3600
+            minutes = (remaining_seconds % 3600) // 60
+            seconds = remaining_seconds % 60
+            self.timer_status.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+            self.timer_status.setProperty("timerStatus", "active")
+        else:
+            self.timer_status.setText("Inactive")
+            self.timer_status.setProperty("timerStatus", "inactive")
+
+        # Update the style
+        self.timer_status.style().unpolish(self.timer_status)
+        self.timer_status.style().polish(self.timer_status)
+
+    def onTimerExpired(self):
+        """Handle timer expiration"""
+        self.log_message.emit("HV timer expired - output automatically disabled")
+
+        # Update UI to reflect that HV is now disabled
+        self.output_status.setText("DISABLED")
+        self.output_status.setProperty("outputStatus", "disabled")
+        self.output_status.style().unpolish(self.output_status)
+        self.output_status.style().polish(self.output_status)
+
+        # Update button states
+        self.enable_hv_btn.setEnabled(True)
+        self.enable_hv_with_timer_btn.setEnabled(True)
+        self.disable_hv_btn.setEnabled(False)
+        self.stop_timer_btn.setEnabled(False)
+
+        # Update timer status
+        self.timer_status.setText("Expired")
+        self.timer_status.setProperty("timerStatus", "expired")
+        self.timer_status.style().unpolish(self.timer_status)
+        self.timer_status.style().polish(self.timer_status)

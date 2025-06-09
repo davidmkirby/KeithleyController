@@ -18,18 +18,7 @@ if project_root not in sys.path:
 # Collect data files and binary dependencies for all packages
 datas = []
 binaries = []
-hiddenimports = [
-    'PyQt6.QtCore',
-    'PyQt6.QtGui',
-    'PyQt6.QtWidgets',
-    'PyQt6.sip',
-    'pyqtgraph.graphicsItems',
-    'pyqtgraph.exporters',
-    'numpy',
-    'pandas',
-    'serial',
-    'pyvisa'
-]
+hiddenimports = []
 
 # PyQt6 data files
 qt_data = collect_all('PyQt6')[0]
@@ -40,17 +29,12 @@ pyqtgraph_data = collect_all('pyqtgraph')[0]
 datas.extend(pyqtgraph_data)
 
 # Add application specific files
-app_datas = [
+datas.extend([
     ('src/', 'src/'),
+    ('logs/', 'logs/'),
     ('requirements.txt', '.'),
     ('README.md', '.'),
-]
-
-# Only add logs directory if it exists (not in CI environments)
-if os.path.exists('logs'):
-    app_datas.append(('logs/', 'logs/'))
-
-datas.extend(app_datas)
+])
 
 # Create the Analysis object
 a = Analysis(
@@ -58,7 +42,7 @@ a = Analysis(
     pathex=[project_root],
     binaries=binaries,
     datas=datas,
-    hiddenimports=hiddenimports,
+    hiddenimports=['PyQt6.sip'] + hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -13,30 +13,30 @@ def test_imports():
 
     try:
         import PyQt6
-        print("[SUCCESS] PyQt6 imported successfully")
+        print("✅ PyQt6 imported successfully")
     except ImportError as e:
-        print(f"[ERROR] PyQt6 import failed: {e}")
+        print(f"❌ PyQt6 import failed: {e}")
         return False
 
     try:
         import pyvisa
-        print("[SUCCESS] PyVISA imported successfully")
+        print("✅ PyVISA imported successfully")
     except ImportError as e:
-        print(f"[ERROR] PyVISA import failed: {e}")
+        print(f"❌ PyVISA import failed: {e}")
         return False
 
     try:
         import pyqtgraph
-        print("[SUCCESS] PyQtGraph imported successfully")
+        print("✅ PyQtGraph imported successfully")
     except ImportError as e:
-        print(f"[ERROR] PyQtGraph import failed: {e}")
+        print(f"❌ PyQtGraph import failed: {e}")
         return False
 
     try:
         import numpy
-        print("[SUCCESS] NumPy imported successfully")
+        print("✅ NumPy imported successfully")
     except ImportError as e:
-        print(f"[ERROR] NumPy import failed: {e}")
+        print(f"❌ NumPy import failed: {e}")
         return False
 
     return True
@@ -49,14 +49,14 @@ def test_visa_resources():
         import pyvisa
         rm = pyvisa.ResourceManager()
         resources = rm.list_resources()
-        print(f"[SUCCESS] VISA ResourceManager created successfully")
-        print(f"Available resources: {len(resources)}")
+        print(f"✅ VISA ResourceManager created successfully")
+        print(f"📡 Available resources: {len(resources)}")
         for resource in resources:
             print(f"   - {resource}")
         return True
     except Exception as e:
-        print(f"[ERROR] VISA test failed: {e}")
-        print("NOTE: Make sure NI-VISA is installed")
+        print(f"❌ VISA test failed: {e}")
+        print("💡 Make sure NI-VISA is installed")
         return False
 
 def test_application_creation():
@@ -68,30 +68,30 @@ def test_application_creation():
 
         # Create QApplication
         app = QApplication([])
-        print("[SUCCESS] QApplication created successfully")
+        print("✅ QApplication created successfully")
 
         # Test importing our modules
         try:
             from src.core.instrument_control import InstrumentController
             controller = InstrumentController()
-            print("[SUCCESS] InstrumentController created successfully")
+            print("✅ InstrumentController created successfully")
         except Exception as e:
-            print(f"[ERROR] InstrumentController creation failed: {e}")
+            print(f"❌ InstrumentController creation failed: {e}")
             return False
 
         try:
             from src.main_window import KeithleyDualController
             # Don't actually show the window in test
-            print("[SUCCESS] KeithleyDualController class imported successfully")
+            print("✅ KeithleyDualController class imported successfully")
         except Exception as e:
-            print(f"[ERROR] KeithleyDualController import failed: {e}")
+            print(f"❌ KeithleyDualController import failed: {e}")
             return False
 
         app.quit()
         return True
 
     except Exception as e:
-        print(f"[ERROR] Application test failed: {e}")
+        print(f"❌ Application test failed: {e}")
         traceback.print_exc()
         return False
 
@@ -116,14 +116,14 @@ def test_file_structure():
     for filename in required_files:
         # Check existence from project root
         if os.path.exists(os.path.join(project_root, filename)):
-            print(f"[SUCCESS] {filename} found")
+            print(f"✅ {filename} found")
         else:
-            print(f"[ERROR] {filename} missing")
+            print(f"❌ {filename} missing")
             missing_files.append(filename)
 
     if missing_files:
-        print(f"\n[WARNING] Missing files: {missing_files}")
-        print("NOTE: Make sure all Python files are in the correct src subdirectories")
+        print(f"\n⚠️  Missing files: {missing_files}")
+        print("💡 Make sure all Python files are in the correct src subdirectories")
         return False
 
     return True
@@ -144,12 +144,12 @@ def main():
     results = []
 
     for test_name, test_func in tests:
-        print(f"\nRunning {test_name} test...")
+        print(f"\n🧪 Running {test_name} test...")
         try:
             result = test_func()
             results.append((test_name, result))
         except Exception as e:
-            print(f"FAIL: {test_name} test crashed: {e}")
+            print(f"❌ {test_name} test crashed: {e}")
             results.append((test_name, False))
 
     # Summary
@@ -159,7 +159,7 @@ def main():
 
     passed = 0
     for test_name, result in results:
-        status = "PASS" if result else "FAIL"
+        status = "✅ PASS" if result else "❌ FAIL"
         print(f"{test_name:<20} {status}")
         if result:
             passed += 1
@@ -167,11 +167,11 @@ def main():
     print(f"\nTests passed: {passed}/{len(results)}")
 
     if passed == len(results):
-        print("\nAll tests passed! The application should run correctly.")
-        print("Try running: python src/main.py")
+        print("\n🎉 All tests passed! The application should run correctly.")
+        print("💡 Try running: python src/main.py")
     else:
-        print("\nSome tests failed. Check the output above for details.")
-        print("Make sure all dependencies are installed: pip install -r requirements.txt")
+        print("\n⚠️  Some tests failed. Check the output above for details.")
+        print("💡 Make sure all dependencies are installed: pip install -r requirements.txt")
 
 if __name__ == "__main__":
     main()
@@ -192,12 +192,12 @@ def run_all_tests():
     results = []
 
     for test_name, test_func in tests:
-        print(f"\nRunning {test_name} test...")
+        print(f"\n🧪 Running {test_name} test...")
         try:
             result = test_func()
             results.append((test_name, result))
         except Exception as e:
-            print(f"FAIL: {test_name} test crashed: {e}")
+            print(f"❌ {test_name} test crashed: {e}")
             results.append((test_name, False))
 
     # Summary
@@ -207,7 +207,7 @@ def run_all_tests():
 
     passed = 0
     for test_name, result in results:
-        status = "PASS" if result else "FAIL"
+        status = "✅ PASS" if result else "❌ FAIL"
         print(f"{test_name:<20} {status}")
         if result:
             passed += 1
@@ -216,10 +216,10 @@ def run_all_tests():
 
     success = passed == len(results)
     if success:
-        print("\nAll tests passed! The application should run correctly.")
-        print("Try running: python src/main.py")
+        print("\n🎉 All tests passed! The application should run correctly.")
+        print("💡 Try running: python src/main.py")
     else:
-        print("\nSome tests failed. Check the output above for details.")
-        print("Make sure all dependencies are installed: pip install -r requirements.txt")
+        print("\n⚠️  Some tests failed. Check the output above for details.")
+        print("💡 Make sure all dependencies are installed: pip install -r requirements.txt")
 
     return success

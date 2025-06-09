@@ -50,16 +50,16 @@ def main():
 
         # Special warning for ARM->x86_64 cross-compilation on macOS
         if system == 'darwin' and machine == 'arm64' and args.target_arch == 'x86_64':
-            print("WARNING: Cross-compiling from ARM to x86_64 on macOS may require Rosetta 2")
+            print("⚠️  WARNING: Cross-compiling from ARM to x86_64 on macOS may require Rosetta 2")
             print("   If you encounter issues, try installing PyInstaller under Rosetta")
 
         # Special warning for Windows cross-architecture builds
         if system == 'windows':
             if (machine == 'arm64' and args.target_arch == 'x86_64'):
-                print("WARNING: Building x86_64 executables on ARM Windows")
+                print("⚠️  WARNING: Building x86_64 executables on ARM Windows")
                 print("   This may not produce compatible executables")
             elif (machine == 'x86_64' and args.target_arch == 'arm64'):
-                print("WARNING: Building ARM64 executables on x86_64 Windows")
+                print("⚠️  WARNING: Building ARM64 executables on x86_64 Windows")
                 print("   This may not produce compatible executables")
 
     # Add spec file
